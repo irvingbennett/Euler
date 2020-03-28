@@ -70,11 +70,21 @@ var score map[string][]string
 // Score returns the score of a hand of cards
 func Score(h []string) (hand Hand) {
 	rank := "AKQJT98765432"
+	lowStraight := "A5432"
 	royal := "AKQJT"
 
 	var cards Cards
 	for _, card := range h {
-		cards = append(cards, Card{string(card[0]), string(card[1])})
+		c := []rune(card)
+		if len(c) == 3 {
+			fmt.Println("--------------------------------")
+			fmt.Println("*****", card, len(card), len(c), "*****")
+			fmt.Println("--------------------------------")
+			cards = append(cards, Card{"T", string(c[2])})
+		} else {
+			cards = append(cards, Card{string(card[0]), string(c[1])})
+		}
+
 	}
 	sort.Sort(cards)
 	hand.cards = cards
@@ -96,6 +106,7 @@ func Score(h []string) (hand Hand) {
 
 	// Straight check
 	straight := false
+	lowstraight := false
 	s := []string{}
 	suit := hand.cards[0].suit
 	for _, card := range hand.cards {
@@ -105,7 +116,12 @@ func Score(h []string) (hand Hand) {
 		s = append(s, card.rank)
 	}
 	sequence := strings.Join(s, "")
-	if strings.Contains(rank, sequence) {
+
+	if strings.Contains(rank, sequence) || strings.Contains(lowStraight, sequence) {
+		if strings.Contains(lowStraight, sequence) {
+			fmt.Println("Low straight")
+			lowstraight = true
+		}
 		straight = true
 		if strings.Contains(royal, sequence) {
 			royalFlush = true
@@ -118,7 +134,7 @@ func Score(h []string) (hand Hand) {
 	three := false
 	twoPair := false
 	onePair := false
-
+	pairs := 0
 	for x := range counts {
 		if counts[x].count == 4 {
 			four = true
@@ -127,8 +143,13 @@ func Score(h []string) (hand Hand) {
 			three = true
 		}
 		if counts[x].count == 2 {
+			pairs++
 			onePair = true
 		}
+	}
+	if pairs == 2 {
+		fmt.Println("Two pairs")
+		twoPair = true
 	}
 	if len(counts) == 2 {
 		if counts[0].count == 2 || counts[0].count == 3 {
@@ -156,10 +177,43 @@ func Score(h []string) (hand Hand) {
 		hand.score = SCORE["Royal flush"]
 		hand.value = SCORE["Royal flush"]
 	case flush && straight:
-		// fmt.Println("Straight Flush")
+		fmt.Println("Straight Flush")
 		hand.hand = "Straight Flush"
 		hand.score = SCORE["Straight flush"]
 		hand.value = RANK[hand.cards[0].rank]
+		if lowstraight {
+			hand.value = RANK[hand.cards[1].rank]
+		}
+	case flush && three:
+		// fmt.Println("Flush")
+		hand.hand = "Flush"
+		hand.score = SCORE["Flush"] + (SCORE["Three of a kind"] * 2)
+		hand.value = RANK[hand.cards[0].rank]
+
+	case flush && twoPair:
+		fmt.Println("Flush & Two Pair")
+		hand.hand = "Flush"
+		hand.score = SCORE["Flush"] + (SCORE["Two pair"] * 2)
+		hand.value = RANK[hand.cards[0].rank]
+		highRank := 0
+		for _, count := range counts {
+			if count.count == 2 {
+				if highRank < RANK[count.rank] {
+					highRank = RANK[count.rank]
+				}
+				if hand.value < RANK[count.rank] {
+					hand.value = RANK[count.rank]
+				}
+			}
+		}
+		hand.score += highRank
+
+	case flush && onePair:
+		// fmt.Println("Flush")
+		hand.hand = "Flush"
+		hand.score = SCORE["Flush"] + (SCORE["One pair"] * 2)
+		hand.value = RANK[hand.cards[0].rank]
+
 	case four:
 		// fmt.Println("Four of a kind")
 		hand.hand = "Four of a kind"
@@ -175,6 +229,11 @@ func Score(h []string) (hand Hand) {
 		hand.hand = "Full House"
 		hand.score = SCORE["Full house"]
 		hand.value = RANK[hand.cards[0].rank]
+		for _, count := range counts {
+			if count.count == 3 {
+				hand.value = RANK[count.rank]
+			}
+		}
 	case flush:
 		// fmt.Println("Flush")
 		hand.hand = "Flush"
@@ -185,10 +244,13 @@ func Score(h []string) (hand Hand) {
 		hand.hand = "Straight"
 		hand.score = SCORE["Straight"]
 		hand.value = RANK[hand.cards[0].rank]
+		if lowstraight {
+			hand.value = RANK[hand.cards[1].rank]
+		}
 	case three:
 		// fmt.Println("Three of a kind")
 		hand.hand = "Three of a kind"
-		hand.score = SCORE["Three of kind"]
+		hand.score = SCORE["Three of a kind"]
 		for _, count := range counts {
 			if count.count == 3 {
 				hand.value = RANK[count.rank]
@@ -198,17 +260,22 @@ func Score(h []string) (hand Hand) {
 		// fmt.Println("Two Pairs")
 		hand.hand = "Two pair"
 		hand.score = SCORE["Two pair"]
+		highRank := 0
 		for _, count := range counts {
 			if count.count == 2 {
+				if highRank < RANK[count.rank] {
+					highRank = RANK[count.rank]
+				}
 				if hand.value < RANK[count.rank] {
 					hand.value = RANK[count.rank]
 				}
 			}
 		}
+		hand.score += highRank
 	case onePair:
 		// fmt.Println("One Pair")
 		hand.hand = "One pair"
-		hand.score = SCORE["One pair"]
+		hand.score = SCORE["One pair"] + 13
 		for _, count := range counts {
 			if count.count == 2 {
 				if hand.value < RANK[count.rank] {
@@ -218,7 +285,7 @@ func Score(h []string) (hand Hand) {
 		}
 	default:
 		// fmt.Println("High Card")
-		hand.hand = "Hight card"
+		hand.hand = "High card"
 		hand.score = SCORE["High card"]
 		hand.value = RANK[hand.cards[0].rank]
 	}
